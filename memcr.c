@@ -213,6 +213,8 @@ static int checkpoint_service_socket = SOCKET_INVALID;
 
 #define MAX_CLIENT_CONNECTIONS		8
 
+#define PTRACE_SEIZE_RETRY_MAX		3
+
 struct service_command_ctx {
 	struct service_command svc_cmd;
 	int cd;
@@ -490,7 +492,7 @@ static int seize_pid(pid_t pid)
 	siginfo_t si;
 	int cnt = 0;
 
-retry:
+ptrace_seize_retry:
 	ret = ptrace(PTRACE_SEIZE, pid, NULL, 0);
 	if (ret) {
 		if (errno == ESRCH) {
@@ -498,17 +500,14 @@ retry:
 			return 0;
 		}
         	else if (errno == EPERM) {
-			if (cnt++ < 3) {
+			if (cnt++ < PTRACE_SEIZE_RETRY_MAX) {
 				fprintf(stderr, "ptrace(PTRACE_SEIZE) errno %d retry %d pid %d: %m\n", errno, cnt, pid);
 				usleep(100*1000); //100 milliseconds
-				goto retry;
+				goto ptrace_seize_retry;
 			}
-			return 1;
 		}
-		else {
-			fprintf(stderr, "ptrace(PTRACE_SEIZE) %d pid %d: %m\n", errno, pid);
-			return 1;
-		}
+		fprintf(stderr, "ptrace(PTRACE_SEIZE) %d pid %d: %m\n", errno, pid);
+		return 1;
 	}
 
 try_again:
