@@ -488,16 +488,27 @@ static int seize_pid(pid_t pid)
 	int ret;
 	int status;
 	siginfo_t si;
+	int cnt = 0;
 
+retry:
 	ret = ptrace(PTRACE_SEIZE, pid, NULL, 0);
 	if (ret) {
 		if (errno == ESRCH) {
 			fprintf(stderr, "ptrace(PTRACE_SEIZE) pid %d: %m, ignoring\n", pid);
 			return 0;
 		}
-
-		fprintf(stderr, "ptrace(PTRACE_SEIZE) %d pid %d: %m\n", errno, pid);
-		return 1;
+        	else if (errno == EPERM) {
+			if (cnt++ < 3) {
+				fprintf(stderr, "ptrace(PTRACE_SEIZE) errno %d retry %d pid %d: %m\n", errno, cnt, pid);
+				usleep(100*1000); //100 milliseconds
+				goto retry;
+			}
+			return 1;
+		}
+		else {
+			fprintf(stderr, "ptrace(PTRACE_SEIZE) %d pid %d: %m\n", errno, pid);
+			return 1;
+		}
 	}
 
 try_again:
